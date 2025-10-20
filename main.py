@@ -32,6 +32,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+@app.get("/", include_in_schema=False)
+async def landing_page():
+    return FileResponse("static/index.html")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
