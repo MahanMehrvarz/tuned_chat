@@ -1,47 +1,41 @@
-# Start with a Python 3.11 base image (lightweight version)
 FROM python:3.11-slim
 
-# Set the working directory inside the container
 WORKDIR /app
 
-# Copy your requirements.txt file first
 COPY requirements.txt .
 
-# Install all Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all your project files into the container
 COPY . .
 
-# Tell Docker your app uses port 8080
 EXPOSE 8080
 
-# Command to run when container starts
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "main:app"]
 ```
 
-### **Step 3: Make Sure Gunicorn is in requirements.txt**
+## **Common Mistakes to Check:**
 
-Open `requirements.txt` and ensure this line is there:
+1. **Remove any ``` marks** at the top or bottom
+2. **No quotes around the whole file**
+3. **No extra spaces or special characters**
+4. **File should be named exactly `Dockerfile`** (capital D, no extension)
+
+## **How to Fix It:**
+
+1. Open your `Dockerfile` in VS Code
+2. Delete everything
+3. Copy and paste this clean version:
 ```
-gunicorn
-```
+FROM python:3.11-slim
 
-If it's not there, add it.
+WORKDIR /app
 
-### **Step 4: Create a .dockerignore File** (Optional but recommended)
+COPY requirements.txt .
 
-Create `.dockerignore` in your project root to exclude unnecessary files:
-```
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.Python
-venv/
-env/
-.env
-.git
-.vscode
-*.db
-node_modules
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8080
+
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "main:app"]
