@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chat</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar-left">
+      <button id="backButton" class="back-chip" type="button">← People</button>
+      <span class="topbar-title">Relay Chat</span>
+    </div>
+    <div class="topbar-right">
+      <div class="user-pill">
+        <span id="meLabel" class="pill-text"></span>
+      </div>
+      <a class="topbar-link" href="index.html">Switch</a>
+    </div>
+  </header>
+
+  <main class="content chat-shell">
+    <aside class="card roster-card roster-pane">
+      <div class="roster-header">
+        <div>
+          <h3>People</h3>
+          <p class="muted small">Select someone to chat.</p>
+        </div>
+        <button id="refreshRoster" class="btn icon-btn" type="button" aria-label="Refresh people list">
+          <svg viewBox="0 0 20 20"><path d="M10 3a7 7 0 0 1 6.47 4.5.75.75 0 0 1-1.38.58A5.5 5.5 0 0 0 10 4.5c-1.54 0-2.93.64-3.93 1.67l1.21 1.21a.75.75 0 0 1-1.06 1.06L3.72 6.94a.75.75 0 0 1 0-1.06L5.98 3.6a.75.75 0 0 1 1.06 1.06L5.83 5.87A7 7 0 0 1 10 3Zm-6.47 5.5a.75.75 0 0 1 1.38-.58A5.5 5.5 0 0 0 10 15.5c1.54 0 2.93-.64 3.93-1.67l-1.21-1.21a.75.75 0 1 1 1.06-1.06l2.5 2.5a.75.75 0 0 1 0 1.06l-2.26 2.28a.75.75 0 0 1-1.06-1.06l1.21-1.21A7 7 0 0 1 10 17a7 7 0 0 1-6.47-4.5Z"/></svg>
+        </button>
+      </div>
+      <div id="roster" class="roster-list"></div>
+    </aside>
+
+    <section class="chat-column">
+      <div class="card chat-header">
+        <div class="chat-peer">
+          <h2 id="peerName">Select someone to chat</h2>
+          <p id="peerStatus" class="muted small">No conversation selected.</p>
+        </div>
+        <div class="tone-toggle">
+          <button id="incomingToggle" class="tone-pill" type="button">
+            <span class="pill-label">Incoming tune</span>
+            <span id="incomingSnippet" class="pill-value">Not set</span>
+            <svg viewBox="0 0 20 20"><path d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.12l3.71-2.89a.75.75 0 0 1 .92 1.19l-4.24 3.31a.75.75 0 0 1-.92 0L5.21 8.27a.75.75 0 0 1 .02-1.06z"/></svg>
+          </button>
+          <button id="outgoingToggle" class="tone-pill" type="button">
+            <span class="pill-label">Outgoing tune</span>
+            <span id="outgoingSnippet" class="pill-value">Not set</span>
+            <svg viewBox="0 0 20 20"><path d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.12l3.71-2.89a.75.75 0 0 1 .92 1.19l-4.24 3.31a.75.75 0 0 1-.92 0L5.21 8.27a.75.75 0 0 1 .02-1.06z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <section id="incomingPanel" class="tone-panel">
+        <div class="card tone-card">
+          <div class="card-header">
+            <h3>Edit incoming tune</h3>
+            <p class="muted">Messages you receive will be rewritten with this tone.</p>
+          </div>
+          <textarea id="incomingInput" class="input textarea" rows="3" placeholder="Describe how you'd like to receive messages"></textarea>
+          <div class="tone-actions">
+            <button id="incomingSave" class="btn primary full" type="button">Save tone</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="outgoingPanel" class="tone-panel">
+        <div class="card tone-card">
+          <div class="card-header">
+            <h3>Edit outgoing tune</h3>
+            <p class="muted">Your messages will be rewritten with this tone before sending.</p>
+          </div>
+          <textarea id="outgoingInput" class="input textarea" rows="3" placeholder="Describe how you'd like to sound"></textarea>
+          <div class="tone-actions">
+            <button id="outgoingSave" class="btn primary full" type="button">Save tone</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card chat-card">
+        <div class="chat-scroll">
+          <div id="messages" class="messages"></div>
+        </div>
+        <div class="composer">
+          <textarea id="msg" class="input" placeholder="Select someone first…" rows="1" disabled></textarea>
+          <button id="sendBtn" class="btn primary send-btn" type="button" aria-label="Send message" disabled>
+            <svg viewBox="0 0 24 24"><path d="M3.4 20.6 22 12 3.4 3.4l-.3 7.8L16 12l-12.9.8z"/></svg>
+          </button>
+        </div>
+      </section>
+    </section>
+  </main>
+</div>
+
+<script>
+const uid = Number(localStorage.getItem('user_id'));
+const nickname = localStorage.getItem('nickname') || '';
+const params = new URLSearchParams(location.search);
+const initialPeerId = Number(params.get('peer')) || null;
+
+if(!uid || !nickname){
+  location.href = 'index.html';
+}
+
+const meLabel = document.getElementById('meLabel');
+const backButton = document.getElementById('backButton');
+const rosterEl = document.getElementById('roster');
+const refreshRosterBtn = document.getElementById('refreshRoster');
+const peerNameEl = document.getElementById('peerName');
+const peerStatusEl = document.getElementById('peerStatus');
+const incomingToggle = document.getElementById('incomingToggle');
+const outgoingToggle = document.getElementById('outgoingToggle');
+const incomingSnippet = document.getElementById('incomingSnippet');
+const outgoingSnippet = document.getElementById('outgoingSnippet');
+const incomingPanel = document.getElementById('incomingPanel');
+const outgoingPanel = document.getElementById('outgoingPanel');
+const incomingInput = document.getElementById('incomingInput');
+const outgoingInput = document.getElementById('outgoingInput');
+const incomingSave = document.getElementById('incomingSave');
+const outgoingSave = document.getElementById('outgoingSave');
+const messagesBox = document.getElementById('messages');
+const composerInput = document.getElementById('msg');
+const sendBtn = document.getElementById('sendBtn');
+
+meLabel.textContent = `${nickname} (#${uid})`;
+
+backButton.addEventListener('click', () => {
+  location.href = 'users.html';
+});
+
+const lastSeenKey = 'relay_last_seen';
+let lastSeen = {};
+
+const state = {
+  conversations: new Map(),
+  messages: new Map(),
+  activePeerId: initialPeerId,
+  currentIncoming: '',
+  currentOutgoing: '',
+};
+
+let ws;
+let rosterTimer = null;
+let profileTimer = null;
+let presenceTimer = null;
+let stickToBottom = true;
+let unreadBadge = null;
+
+function loadLastSeen(){
+  try{
+    lastSeen = JSON.parse(localStorage.getItem(lastSeenKey) || '{}');
+  }catch(err){
+    lastSeen = {};
+  }
+}
+
+function saveLastSeen(){
+  localStorage.setItem(lastSeenKey, JSON.stringify(lastSeen));
+}
+
+function markSeen(peerId, messageId){
+  if(!messageId) return;
+  lastSeen[String(peerId)] = messageId;
+  saveLastSeen();
+}
+
+function getLastSeen(peerId){
+  return Number(lastSeen[String(peerId)] || 0);
+}
+
+function isWideScreen(){
+  return window.matchMedia('(min-width: 900px)').matches;
+}
+
+function escapeHtml(str=''){
+  return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function updateSnippet(el, value){
+  const trimmed = (value || '').trim();
+  if(!trimmed){
+    el.textContent = 'Not set';
+    el.classList.add('empty');
+  } else {
+    el.textContent = trimmed.length > 60 ? `${trimmed.slice(0,57)}…` : trimmed;
+    el.classList.remove('empty');
+  }
+}
+
+function togglePanel(panel, input, currentValue){
+  if(!panel) return;
+  const isOpen = panel.classList.contains('is-open');
+  if(isOpen){
+    panel.classList.remove('is-open');
+  } else {
+    panel.classList.add('is-open');
+    if(input){
+      input.value = currentValue;
+      requestAnimationFrame(() => {
+        autoGrow(input);
+        input.focus({preventScroll:true});
+        const len = input.value.length;
+        input.setSelectionRange(len, len);
+      });
+    }
+  }
+}
+
+function collapsePanel(panel, input, currentValue){
+  if(panel && panel.classList.contains('is-open')){
+    panel.classList.remove('is-open');
+    if(input){
+      input.value = currentValue;
+      autoGrow(input);
+    }
+  }
+}
+
+function formatConversationSummary(raw){
+  let ts = raw.last_message_timestamp ? new Date(raw.last_message_timestamp) : null;
+  const lastId = raw.last_message_id || 0;
+  const lastSender = raw.last_message_sender_id || null;
+  const lastText = raw.last_message_text || '';
+  const unread = lastId && lastSender !== uid && lastId > getLastSeen(raw.peer_id) ? 1 : 0;
+  return {
+    peerId: raw.peer_id,
+    nickname: raw.nickname,
+    isOnline: !!raw.is_online,
+    lastId,
+    lastSenderId: lastSender,
+    lastText,
+    lastTs: ts,
+    unread,
+  };
+}
+
+function mergeConversation(summary){
+  const existing = state.conversations.get(summary.peerId);
+  if(existing){
+    existing.nickname = summary.nickname;
+    existing.isOnline = summary.isOnline;
+    if(summary.lastTs && (!existing.lastTs || summary.lastTs > existing.lastTs)){
+      existing.lastId = summary.lastId;
+      existing.lastSenderId = summary.lastSenderId;
+      existing.lastText = summary.lastText;
+      existing.lastTs = summary.lastTs;
+    }
+    existing.unread = summary.unread;
+    return existing;
+  }
+  state.conversations.set(summary.peerId, {...summary});
+  return summary;
+}
+
+function sortConversations(){
+  return Array.from(state.conversations.values()).sort((a,b) => {
+    const at = a.lastTs ? a.lastTs.getTime() : 0;
+    const bt = b.lastTs ? b.lastTs.getTime() : 0;
+    if(bt !== at){
+      return bt - at;
+    }
+    return a.nickname.localeCompare(b.nickname);
+  });
+}
+
+function renderRoster(){
+  rosterEl.innerHTML = '';
+  const items = sortConversations();
+  if(!items.length){
+    const empty = document.createElement('div');
+    empty.className = 'roster-empty';
+    empty.innerHTML = '<p class="muted">Share the link so others can join.</p>';
+    rosterEl.appendChild(empty);
+    return;
+  }
+  items.forEach(item => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'roster-item';
+    if(item.peerId === state.activePeerId){
+      btn.classList.add('active');
+    } else if(!item.isOnline){
+      btn.classList.add('offline');
+    }
+    const snippet = item.lastText
+      ? escapeHtml((item.lastSenderId === uid ? 'You: ' : '') + item.lastText)
+      : '<span class="muted">No messages yet</span>';
+    const badge = item.unread ? `<span class="badge">${item.unread}</span>` : '';
+    btn.innerHTML = `
+      <div class="roster-row">
+        <span class="roster-name">${escapeHtml(item.nickname)}</span>
+        <span class="roster-dot ${item.isOnline ? 'online' : 'offline'}"></span>
+      </div>
+      <div class="roster-meta">
+        <span class="roster-snippet">${snippet}</span>
+        ${badge}
+      </div>
+    `;
+    btn.onclick = () => selectPeer(item.peerId);
+    rosterEl.appendChild(btn);
+  });
+}
+
+function ensureConversation(peerId, nickname){
+  if(state.conversations.has(peerId)){
+    return state.conversations.get(peerId);
+  }
+  const entry = {
+    peerId,
+    nickname: nickname || `User #${peerId}`,
+    isOnline: true,
+    lastId: 0,
+    lastSenderId: null,
+    lastText: '',
+    lastTs: null,
+    unread: 0,
+  };
+  state.conversations.set(peerId, entry);
+  return entry;
+}
+
+function normalizeMessage(raw){
+  const mine = raw.sender_id === uid;
+  const text = mine
+    ? (raw.outgoing_text || raw.rephrased_text || raw.original_text || '')
+    : (raw.rephrased_text || raw.outgoing_text || raw.original_text || '');
+  return {
+    id: raw.id,
+    senderId: raw.sender_id,
+    recipientId: raw.recipient_id,
+    mine,
+    text,
+    original: raw.original_text,
+    outgoing: raw.outgoing_text,
+    final: raw.rephrased_text,
+  };
+}
+
+function renderMessages(peerId){
+  messagesBox.innerHTML = '';
+  const list = state.messages.get(peerId) || [];
+  list.forEach(entry => {
+    const div = document.createElement('div');
+    div.className = 'bubble' + (entry.mine ? ' mine' : '');
+    div.innerHTML = `${formatMessage(entry.text)}<div class="meta"></div>`;
+    messagesBox.appendChild(div);
+  });
+  const last = list[list.length - 1];
+  if(last){
+    markSeen(peerId, last.id);
+  }
+  stickToBottom = true;
+  requestAnimationFrame(scrollMessages);
+  removeUnreadBadge();
+}
+
+function formatMessage(text){
+  const safe = escapeHtml(text || '');
+  return safe.replace(/\n/g, '<br>');
+}
+
+function appendMessage(peerId, entry){
+  const list = state.messages.get(peerId) || [];
+  list.push(entry);
+  state.messages.set(peerId, list);
+  updateConversationMeta(peerId, entry);
+  if(peerId === state.activePeerId){
+    const div = document.createElement('div');
+    div.className = 'bubble' + (entry.mine ? ' mine' : '');
+    div.innerHTML = `${formatMessage(entry.text)}<div class="meta"></div>`;
+    messagesBox.appendChild(div);
+    stickToBottom = true;
+    requestAnimationFrame(scrollMessages);
+    removeUnreadBadge();
+    markSeen(peerId, entry.id);
+  } else if(entry.senderId !== uid){
+    const convo = ensureConversation(peerId);
+    convo.unread = (convo.unread || 0) + 1;
+  }
+  renderRoster();
+}
+
+function updateConversationMeta(peerId, entry){
+  const convo = ensureConversation(peerId);
+  convo.lastId = entry.id || convo.lastId;
+  convo.lastSenderId = entry.senderId;
+  convo.lastText = entry.text;
+  convo.lastTs = new Date();
+  if(entry.senderId !== uid && peerId !== state.activePeerId){
+    convo.unread = (convo.unread || 0) + 1;
+  } else if(peerId === state.activePeerId){
+    convo.unread = 0;
+  }
+}
+
+async function fetchHistory(peerId){
+  try{
+    const res = await fetch(`/messages/${uid}/${peerId}`);
+    if(!res.ok){
+      throw new Error('Failed to load history');
+    }
+    const data = await res.json();
+    const normalized = data.map(normalizeMessage);
+    state.messages.set(peerId, normalized);
+    const last = normalized[normalized.length - 1];
+    if(last){
+      updateConversationMeta(peerId, last);
+    }
+    if(peerId === state.activePeerId){
+      renderMessages(peerId);
+    }
+    renderRoster();
+  }catch(err){
+    console.error(err);
+  }
+}
+
+async function selectPeer(peerId){
+  if(!peerId){
+    return;
+  }
+  state.activePeerId = peerId;
+  const convo = ensureConversation(peerId);
+  peerNameEl.textContent = convo.nickname;
+  peerStatusEl.textContent = convo.isOnline ? 'Online now' : 'Offline';
+  composerInput.disabled = false;
+  sendBtn.disabled = false;
+  composerInput.placeholder = 'Type a message…';
+  if(ws && ws.readyState === 1){
+    ws.send(JSON.stringify({type:'join', peer_id: peerId}));
+  }
+  const lastId = convo.lastId;
+  convo.unread = 0;
+  if(lastId){
+    markSeen(peerId, lastId);
+  }
+  renderRoster();
+  if(!state.messages.has(peerId)){
+    await fetchHistory(peerId);
+  } else {
+    renderMessages(peerId);
+  }
+  if(!isWideScreen()){
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+}
+
+async function loadProfile(){
+  try{
+    const res = await fetch('/users');
+    if(!res.ok){
+      throw new Error('Failed to load profile');
+    }
+    const data = await res.json();
+    const me = data.find(u => u.id === uid);
+    if(me){
+      state.currentIncoming = me.instruction || '';
+      state.currentOutgoing = me.outgoing_instruction || '';
+      updateSnippet(incomingSnippet, state.currentIncoming);
+      updateSnippet(outgoingSnippet, state.currentOutgoing);
+      if(incomingInput){
+        incomingInput.value = state.currentIncoming;
+        autoGrow(incomingInput);
+      }
+      if(outgoingInput){
+        outgoingInput.value = state.currentOutgoing;
+        autoGrow(outgoingInput);
+      }
+    }
+    data.forEach(user => {
+      if(user.id === uid) return;
+      const convo = ensureConversation(user.id, user.nickname);
+      convo.nickname = user.nickname;
+      convo.isOnline = !!user.is_online;
+    });
+    if(state.activePeerId){
+      const active = state.conversations.get(state.activePeerId);
+      if(active){
+        peerNameEl.textContent = active.nickname;
+        peerStatusEl.textContent = active.isOnline ? 'Online now' : 'Offline';
+      }
+    }
+    renderRoster();
+  }catch(err){
+    console.error(err);
+  }
+}
+
+async function loadConversations(){
+  try{
+    const res = await fetch(`/conversations/${uid}`);
+    if(!res.ok){
+      throw new Error('Failed to load conversations');
+    }
+    const data = await res.json();
+    if(!data.length){
+      renderRoster();
+      return;
+    }
+    data.forEach(item => {
+      const summary = formatConversationSummary(item);
+      const convo = mergeConversation(summary);
+      if(convo.peerId === state.activePeerId){
+        peerNameEl.textContent = convo.nickname;
+        peerStatusEl.textContent = convo.isOnline ? 'Online now' : 'Offline';
+      }
+    });
+    renderRoster();
+    if(!state.activePeerId){
+      const fallback = state.conversations.get(initialPeerId) || sortConversations()[0];
+      if(fallback){
+        selectPeer(fallback.peerId);
+      }
+    }
+  }catch(err){
+    console.error(err);
+  }
+}
+
+async function saveIncoming(){
+  const text = (incomingInput.value || '').trim();
+  incomingInput.value = text;
+  try{
+    const res = await fetch(`/instruction/${uid}?instruction=${encodeURIComponent(text)}`, {method:'POST'});
+    if(!res.ok){
+      throw new Error('Failed to save incoming tune');
+    }
+    const payload = await res.json();
+    state.currentIncoming = (payload && payload.instruction) || text;
+    updateSnippet(incomingSnippet, state.currentIncoming);
+    collapsePanel(incomingPanel, incomingInput, state.currentIncoming);
+  }catch(err){
+    console.error(err);
+    incomingInput.value = state.currentIncoming;
+  }finally{
+    autoGrow(incomingInput);
+  }
+}
+
+async function saveOutgoing(){
+  const text = (outgoingInput.value || '').trim();
+  outgoingInput.value = text;
+  try{
+    const res = await fetch(`/outgoing/${uid}?instruction=${encodeURIComponent(text)}`, {method:'POST'});
+    if(!res.ok){
+      throw new Error('Failed to save outgoing tune');
+    }
+    const payload = await res.json();
+    state.currentOutgoing = (payload && payload.outgoing_instruction) || text;
+    updateSnippet(outgoingSnippet, state.currentOutgoing);
+    collapsePanel(outgoingPanel, outgoingInput, state.currentOutgoing);
+  }catch(err){
+    console.error(err);
+    outgoingInput.value = state.currentOutgoing;
+  }finally{
+    autoGrow(outgoingInput);
+  }
+}
+
+function doSend(){
+  const text = composerInput.value.trim();
+  if(!text || !ws || ws.readyState !== 1 || !state.activePeerId){
+    return;
+  }
+  ws.send(JSON.stringify({type:'send', to: state.activePeerId, text}));
+  composerInput.value = '';
+  autoGrow(composerInput, {minHeight:44});
+}
+
+function autoGrow(el, opts={}){
+  if(!el) return;
+  el.style.height = 'auto';
+  const min = opts.minHeight || 72;
+  el.style.height = `${Math.max(el.scrollHeight, min)}px`;
+}
+
+function scrollMessages(){
+  messagesBox.scrollTop = messagesBox.scrollHeight;
+}
+
+function isNearBottom(){
+  const {scrollTop, clientHeight, scrollHeight} = messagesBox;
+  return scrollHeight - (scrollTop + clientHeight) < 120;
+}
+
+function createUnreadBadge(){
+  const pill = document.createElement('div');
+  pill.className = 'unread-badge';
+  pill.textContent = 'New messages';
+  pill.onclick = () => {
+    stickToBottom = true;
+    scrollMessages();
+    removeUnreadBadge();
+  };
+  return pill;
+}
+
+function removeUnreadBadge(){
+  if(unreadBadge && unreadBadge.parentNode){
+    unreadBadge.parentNode.removeChild(unreadBadge);
+  }
+  unreadBadge = null;
+}
+
+async function connectSocket(){
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws/${uid}`);
+  ws.onopen = () => {
+    const target = state.activePeerId || 0;
+    ws.send(JSON.stringify({type:'join', peer_id: target}));
+  };
+  ws.onmessage = (ev) => {
+    try{
+      const msg = JSON.parse(ev.data);
+      if(msg.type !== 'message'){
+        return;
+      }
+      const mine = !!msg.mine;
+      const peerId = mine ? msg.recipient_id : msg.sender_id;
+      const text = mine
+        ? (msg.outgoing_text || msg.text || msg.final_text || msg.original_text || '')
+        : (msg.final_text || msg.text || msg.outgoing_text || msg.original_text || '');
+      const entry = {
+        id: msg.id,
+        senderId: msg.sender_id,
+        recipientId: msg.recipient_id,
+        mine,
+        text,
+        original: msg.original_text,
+        outgoing: msg.outgoing_text,
+        final: msg.final_text || msg.text,
+      };
+      appendMessage(peerId, entry);
+    }catch(err){
+      console.error('Failed to process message', err);
+    }
+  };
+  ws.onclose = () => {
+    setTimeout(connectSocket, 1500);
+  };
+}
+
+async function pingPresence(){
+  try{
+    await fetch(`/presence/${uid}`, {method:'POST'});
+  }catch(err){
+    // ignore
+  }
+}
+
+function bootstrap(){
+  loadLastSeen();
+  loadProfile();
+  loadConversations();
+  connectSocket();
+  pingPresence();
+  profileTimer = setInterval(loadProfile, 7000);
+  rosterTimer = setInterval(loadConversations, 5000);
+  presenceTimer = setInterval(pingPresence, 4000);
+}
+
+bootstrap();
+
+if(refreshRosterBtn){
+  refreshRosterBtn.addEventListener('click', () => loadConversations());
+}
+if(incomingToggle){
+  incomingToggle.addEventListener('click', () => togglePanel(incomingPanel, incomingInput, state.currentIncoming));
+}
+if(outgoingToggle){
+  outgoingToggle.addEventListener('click', () => togglePanel(outgoingPanel, outgoingInput, state.currentOutgoing));
+}
+if(incomingSave){
+  incomingSave.addEventListener('click', () => saveIncoming());
+}
+if(outgoingSave){
+  outgoingSave.addEventListener('click', () => saveOutgoing());
+}
+if(incomingInput){
+  incomingInput.addEventListener('input', () => autoGrow(incomingInput));
+}
+if(outgoingInput){
+  outgoingInput.addEventListener('input', () => autoGrow(outgoingInput));
+}
+composerInput.addEventListener('input', () => autoGrow(composerInput, {minHeight:44}));
+composerInput.addEventListener('keydown', (ev) => {
+  if(ev.key === 'Enter' && !ev.shiftKey){
+    ev.preventDefault();
+    doSend();
+  }
+});
+sendBtn.addEventListener('click', () => doSend());
+
+messagesBox.addEventListener('scroll', () => {
+  const {scrollTop, clientHeight, scrollHeight} = messagesBox;
+  stickToBottom = scrollTop + clientHeight >= scrollHeight - 40;
+  if(stickToBottom){
+    removeUnreadBadge();
+  } else if(!unreadBadge && !stickToBottom && !isNearBottom()){
+    unreadBadge = createUnreadBadge();
+    messagesBox.appendChild(unreadBadge);
+  }
+});
+
+document.addEventListener('click', (ev) => {
+  const target = ev.target;
+  if(!incomingPanel.contains(target) && !incomingToggle.contains(target)){
+    collapsePanel(incomingPanel, incomingInput, state.currentIncoming);
+  }
+  if(!outgoingPanel.contains(target) && !outgoingToggle.contains(target)){
+    collapsePanel(outgoingPanel, outgoingInput, state.currentOutgoing);
+  }
+});
+
+document.addEventListener('keydown', (ev) => {
+  if(ev.key === 'Escape'){
+    collapsePanel(incomingPanel, incomingInput, state.currentIncoming);
+    collapsePanel(outgoingPanel, outgoingInput, state.currentOutgoing);
+  }
+});
+
+window.addEventListener('storage', (ev) => {
+  if(ev.key === lastSeenKey){
+    loadLastSeen();
+    renderRoster();
+  }
+});
+
+window.addEventListener('beforeunload', () => {
+  clearInterval(rosterTimer);
+  clearInterval(profileTimer);
+  clearInterval(presenceTimer);
+  if(ws){
+    try{ ws.close(); }catch(err){}
+  }
+});
+
+autoGrow(composerInput, {minHeight:44});
+</script>
+</body>
+</html>

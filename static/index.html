@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Register</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="logo-dot"></span>
+      <span class="topbar-title">Relay Lounge</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-subtitle">AI Tone Relay</span>
+    </div>
+  </header>
+  <main class="content auth-content">
+    <section class="card hero-card">
+      <h2>Jump into the conversation</h2>
+      <p class="muted">Pick a display name to enter the shared chat space.</p>
+      <div class="form-grid">
+        <input id="name" class="input" placeholder="Nickname">
+        <button class="btn primary full" onclick="register()">Join</button>
+      </div>
+    </section>
+  </main>
+</div>
+<script>
+async function register(){
+  const name = document.getElementById('name').value.trim();
+  if(!name) return;
+  const res = await fetch('/register', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({nickname:name})});
+  const user = await res.json();
+  localStorage.setItem('user_id', user.id);
+  localStorage.setItem('nickname', user.nickname);
+  location.href = 'users.html';
+}
+</script>
+</body>
+</html>

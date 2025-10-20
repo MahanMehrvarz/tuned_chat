@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>People</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="logo-dot"></span>
+      <span class="topbar-title">Relay Chat</span>
+    </div>
+    <div class="topbar-right">
+      <div class="user-pill">
+        <span id="meLabel" class="pill-text"></span>
+      </div>
+      <a class="topbar-link" href="index.html">Switch</a>
+    </div>
+  </header>
+
+  <main class="content roster-page">
+    <section class="card roster-card tall">
+      <div class="roster-header">
+        <div>
+          <h3>People</h3>
+          <p class="muted small">Tap a name to open the chat.</p>
+        </div>
+        <button id="refreshRoster" class="btn icon-btn" type="button" aria-label="Refresh">
+          <svg viewBox="0 0 20 20"><path d="M10 3a7 7 0 0 1 6.47 4.5.75.75 0 0 1-1.38.58A5.5 5.5 0 0 0 10 4.5c-1.54 0-2.93.64-3.93 1.67l1.21 1.21a.75.75 0 0 1-1.06 1.06L3.72 6.94a.75.75 0 0 1 0-1.06L5.98 3.6a.75.75 0 0 1 1.06 1.06L5.83 5.87A7 7 0 0 1 10 3Zm-6.47 5.5a.75.75 0 0 1 1.38-.58A5.5 5.5 0 0 0 10 15.5c1.54 0 2.93-.64 3.93-1.67l-1.21-1.21a.75.75 0 1 1 1.06-1.06l2.5 2.5a.75.75 0 0 1 0 1.06l-2.26 2.28a.75.75 0 0 1-1.06-1.06l1.21-1.21A7 7 0 0 1 10 17a7 7 0 0 1-6.47-4.5Z"/></svg>
+        </button>
+      </div>
+      <div id="roster" class="roster-list"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+const uid = Number(localStorage.getItem('user_id'));
+const nickname = localStorage.getItem('nickname') || '';
+if(!uid || !nickname){
+  location.href = 'index.html';
+}
+
+const wideScreen = window.matchMedia('(min-width: 900px)');
+if(wideScreen.matches){
+  location.replace('chat.html');
+}
+wideScreen.addEventListener('change', (ev) => {
+  if(ev.matches){
+    location.replace('chat.html');
+  }
+});
+
+const meLabel = document.getElementById('meLabel');
+const rosterEl = document.getElementById('roster');
+const refreshRosterBtn = document.getElementById('refreshRoster');
+
+const lastSeenKey = 'relay_last_seen';
+
+const state = {
+  conversations: [],
+  lastSeen: {},
+};
+
+let ws;
+let rosterTimer = null;
+let presenceTimer = null;
+
+meLabel.textContent = `${nickname} (#${uid})`;
+
+function loadLastSeen(){
+  try{
+    state.lastSeen = JSON.parse(localStorage.getItem(lastSeenKey) || '{}');
+  }catch(err){
+    state.lastSeen = {};
+  }
+}
+
+function saveLastSeen(){
+  localStorage.setItem(lastSeenKey, JSON.stringify(state.lastSeen));
+}
+
+function setLastSeen(peerId, messageId){
+  if(!messageId) return;
+  state.lastSeen[peerId] = messageId;
+  saveLastSeen();
+}
+
+function getLastSeen(peerId){
+  return Number(state.lastSeen[String(peerId)] || 0);
+}
+
+function escapeHtml(str=''){
+  return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function formatSnippet(summary){
+  if(!summary.last_message_text){
+    return '<span class="muted">No messages yet</span>';
+  }
+  const prefix = summary.last_message_sender_id === uid ? 'You: ' : '';
+  const safe = escapeHtml(summary.last_message_text);
+  return `${prefix}${safe}`;
+}
+
+function hasUnread(summary){
+  if(!summary.last_message_id) return false;
+  return summary.last_message_sender_id !== uid && summary.last_message_id > getLastSeen(summary.peer_id);
+}
+
+function sortConversations(){
+  state.conversations.sort((a,b) => {
+    const at = a.last_message_timestamp ? a.last_message_timestamp.getTime() : 0;
+    const bt = b.last_message_timestamp ? b.last_message_timestamp.getTime() : 0;
+    if(bt !== at){
+      return bt - at;
+    }
+    return a.nickname.localeCompare(b.nickname);
+  });
+}
+
+function renderRoster(){
+  rosterEl.innerHTML = '';
+  if(!state.conversations.length){
+    const empty = document.createElement('div');
+    empty.className = 'roster-empty';
+    empty.innerHTML = '<p class="muted">Share the link so others can join.</p>';
+    rosterEl.appendChild(empty);
+    return;
+  }
+  state.conversations.forEach(item => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'roster-item';
+    if(!item.is_online){
+      btn.classList.add('offline');
+    }
+    const snippet = formatSnippet(item);
+    const unread = hasUnread(item);
+    const name = escapeHtml(item.nickname);
+    btn.innerHTML = `
+      <div class="roster-row">
+        <span class="roster-name">${name}</span>
+        <span class="roster-dot ${item.is_online ? 'online' : 'offline'}"></span>
+      </div>
+      <div class="roster-meta">
+        <span class="roster-snippet">${snippet}</span>
+        ${unread ? '<span class="badge">New</span>' : ''}
+      </div>
+    `;
+    btn.onclick = () => {
+      location.href = `chat.html?peer=${item.peer_id}`;
+    };
+    rosterEl.appendChild(btn);
+  });
+}
+
+function normalizeSummary(raw){
+  let ts = raw.last_message_timestamp;
+  if(ts){
+    ts = new Date(ts);
+  }
+  return {
+    peer_id: raw.peer_id,
+    nickname: raw.nickname,
+    is_online: !!raw.is_online,
+    last_message_id: raw.last_message_id || 0,
+    last_message_sender_id: raw.last_message_sender_id || null,
+    last_message_text: raw.last_message_text || '',
+    last_message_timestamp: ts,
+  };
+}
+
+async function loadConversations(){
+  try{
+    const res = await fetch(`/conversations/${uid}`);
+    if(!res.ok){
+      throw new Error('Failed to load conversations');
+    }
+    const data = await res.json();
+    state.conversations = data.map(normalizeSummary);
+    sortConversations();
+    renderRoster();
+  }catch(err){
+    console.error(err);
+  }
+}
+
+async function pingPresence(){
+  try{
+    await fetch(`/presence/${uid}`, {method:'POST'});
+  }catch(err){
+    // ignore
+  }
+}
+
+function connectSocket(){
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws/${uid}`);
+  ws.onopen = () => {
+    ws.send(JSON.stringify({type:'join', peer_id: 0}));
+  };
+  ws.onmessage = (ev) => {
+    try{
+      const msg = JSON.parse(ev.data);
+      if(msg.type === 'message'){
+        const mine = !!msg.mine;
+        const peerId = mine ? msg.recipient_id : msg.sender_id;
+        const text = mine
+          ? (msg.outgoing_text || msg.text || msg.final_text || msg.original_text || '')
+          : (msg.final_text || msg.text || msg.outgoing_text || msg.original_text || '');
+        const existing = state.conversations.find(item => item.peer_id === peerId);
+        const entry = existing || {
+          peer_id: peerId,
+          nickname: `User #${peerId}`,
+          is_online: true,
+          last_message_id: 0,
+          last_message_sender_id: null,
+          last_message_text: '',
+          last_message_timestamp: null,
+        };
+        entry.last_message_id = msg.id || entry.last_message_id;
+        entry.last_message_sender_id = msg.sender_id;
+        entry.last_message_text = text;
+        entry.last_message_timestamp = new Date();
+        if(!existing){
+          state.conversations.push(entry);
+        }
+        sortConversations();
+        if(mine){
+          setLastSeen(peerId, entry.last_message_id);
+        }
+        renderRoster();
+      }
+    }catch(err){
+      console.error('Failed to process roster message', err);
+    }
+  };
+  ws.onclose = () => {
+    setTimeout(connectSocket, 1500);
+  };
+}
+
+function bootstrap(){
+  loadLastSeen();
+  loadConversations();
+  connectSocket();
+  rosterTimer = setInterval(loadConversations, 5000);
+  presenceTimer = setInterval(pingPresence, 4000);
+  pingPresence();
+}
+
+bootstrap();
+
+if(refreshRosterBtn){
+  refreshRosterBtn.addEventListener('click', () => loadConversations());
+}
+
+window.addEventListener('storage', (ev) => {
+  if(ev.key === lastSeenKey){
+    loadLastSeen();
+    renderRoster();
+  }
+});
+
+window.addEventListener('beforeunload', () => {
+  clearInterval(rosterTimer);
+  clearInterval(presenceTimer);
+  if(ws){
+    try{ ws.close(); }catch(err){}
+  }
+});
+</script>
+</body>
+</html>

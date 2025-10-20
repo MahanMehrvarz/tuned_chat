@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Relay Admin</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="logo-dot"></span>
+      <span class="topbar-title">Relay Admin</span>
+    </div>
+    <div class="topbar-right">
+      <a class="topbar-link" href="index.html">Home</a>
+    </div>
+  </header>
+
+  <main class="content admin-content">
+    <section class="card admin-card">
+      <h2>Share the Lobby</h2>
+      <p class="muted">Ask teammates to scan the QR code or open the link to join the chat lobby from their device.</p>
+
+      <div class="qr-wrap">
+        <img id="qrImage" alt="QR code pointing to lobby" />
+      </div>
+
+      <div class="link-row">
+        <code id="shareLink"></code>
+        <button class="btn primary" id="copyBtn" type="button">Copy link</button>
+      </div>
+
+      <p class="muted tip">Tip: make sure everyone is on the same network as this laptop so the link loads.</p>
+    </section>
+  </main>
+</div>
+
+<script>
+const linkEl = document.getElementById('shareLink');
+const qrImg = document.getElementById('qrImage');
+const copyBtn = document.getElementById('copyBtn');
+let lobbyUrl = '';
+
+async function init(){
+  const proto = window.location.protocol;
+  const port = window.location.port ? `:${window.location.port}` : '';
+  try{
+    const res = await fetch('/host-info');
+    const data = await res.json();
+    const hostIp = data?.ip || window.location.hostname;
+    lobbyUrl = `${proto}//${hostIp}${port}/static/index.html`;
+  }catch(err){
+    lobbyUrl = `${proto}//${window.location.hostname}${port}/static/index.html`;
+  }
+  linkEl.textContent = lobbyUrl;
+  qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(lobbyUrl)}`;
+}
+
+copyBtn.addEventListener('click', async () => {
+  if(!lobbyUrl){
+    lobbyUrl = linkEl.textContent;
+  }
+  try{
+    await navigator.clipboard.writeText(lobbyUrl);
+    copyBtn.textContent = 'Copied!';
+    setTimeout(() => copyBtn.textContent = 'Copy link', 1600);
+  }catch(err){
+    copyBtn.textContent = 'Press Ctrl+C';
+    setTimeout(() => copyBtn.textContent = 'Copy link', 1600);
+  }
+});
+
+init();
+</script>
+</body>
+</html>
