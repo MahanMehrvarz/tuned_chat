@@ -30,11 +30,6 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(lifespan=lifespan)
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-@app.get("/", include_in_schema=False)
-async def landing_page():
-    return FileResponse("static/index.html")
 
 app.add_middleware(
     CORSMiddleware,
@@ -361,3 +356,5 @@ async def ws_endpoint(websocket: WebSocket, user_id: int):
         pass
     finally:
         manager.disconnect(user_id, websocket)
+
+app.mount("/", StaticFiles(directory="static", html=True), name="static-root")
